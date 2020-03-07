@@ -6,6 +6,7 @@
 #include <cmath>
 #include "AudioFile.h"
 
+/* Generates a pure sine wave at -6dB */
 AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, float sample_rate, float frequency = 1000.0) {
     AudioFile<double>::AudioBuffer out;
     out.resize(channels);
@@ -25,6 +26,7 @@ AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, f
     return out;
 }
 
+/* Normalize a buffer of audio data */
 void normalize(AudioFile<double>::AudioBuffer &data, float norm) {
     for(size_t channel = 0; channel < data.size(); channel++) {
         for(size_t i = 0; i < data[channel].size(); i++) {
@@ -42,6 +44,7 @@ int main(int argc, char *argv[])
 
     AudioFile<double> input;
     input.load(argv[1]);
+
     auto chans = input.getNumChannels();
     auto samps = input.getNumSamplesPerChannel();
     auto tone = make_test_tone(chans, samps, input.getSampleRate());
@@ -50,7 +53,8 @@ int main(int argc, char *argv[])
     for(int channel = 0; channel < chans; channel++) {
         for(int i = 0; i < samps; i++) {
             input.samples[channel][i] += tone[channel][i];
-            /* Keep track of highest peak */
+
+            /* Keep track of highest peak for normalization */
             if(std::fabs(input.samples[channel][i]) > norm) {
                 norm = input.samples[channel][i];
             }
