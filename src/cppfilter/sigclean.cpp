@@ -68,9 +68,9 @@ std::vector<double> backwards_fft(std::vector<fftw_complex> &input, int size = F
 void apply_hamming(std::vector<double> &input, int size  = FFT_RES) {
     auto static bl = [size]() {
         std::vector<double> bl(size);
-            std::transform(bl.begin(), bl.end(), bl.begin(), [size](double) {
-                static int v = 0;
-                auto res = 25.0/46 - (21.0/46)*cos(2*M_PI*v/size);
+            int v = 0;
+            std::fill(bl.begin(), bl.end(), [size, v] () mutable {
+                auto res = 25.0/46 - (21.0/46)*cos(2*M_PI*v / (size-1));
                 v++;
                 return res;
             });
@@ -94,7 +94,6 @@ int main(int argc, char *argv[]) {
 
     /* Apply window function and padding */
     apply_hamming(input.samples[0]);
-    //std::fill(input.samples[0].begin() + FFT_RES, input.samples[0].end(), 0);
     plot_signal(input.samples[0], FFT_RES, "Windowed input signal (padding hidden)");
 
     /* Perform the transform on the selected window */
