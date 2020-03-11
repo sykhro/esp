@@ -14,23 +14,28 @@
 /* Converts FFT output to log-scaled power values */
 std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<fftw_complex> &input,
                                                              uint32_t rate, int size = FFT_RES) {
-    double resolution = rate / (size + .0);
-    std::vector<double> freqs{};
-    float count = 0;
-    std::generate_n(std::back_inserter(freqs), size / 2,
-                    [resolution, count]() mutable { return count++ * resolution; });
 
+    /* Generate x-axis */
+    double resolution = rate / (size + .0);
+    std::vector<double> freqs(size/2);
+    std::generate(freqs.begin(), freqs.end(),
+                    [resolution, count = 0]() mutable { return count++ * resolution; });
+
+    /* Normalize and obtain log scale */
     std::vector<double> amps{};
     for (int i = 0; i < size / 2; i++) {
-        amps.push_back((10 * log(std::pow(input[i][0], 2) + std::pow(input[i][1], 2))) / FFT_RES);
+        amps.push_back((std::pow(input[i][0], 2) + std::pow(input[i][1], 2))/size);
     }
+
+    auto max = *std::max_element(amps.begin(), amps.end());
+    std::transform(amps.begin(), amps.end(), amps.begin(), [max](double mag) { return 10 * log(mag/max); });
 
     return std::make_pair(freqs, amps);
 }
 
 /* Performs forward FFT on a signal */
 std::vector<fftw_complex> forward_fft(const std::vector<double> &input, int size = FFT_RES) {
-    if (input.size() < (size_t)size) {
+    if (input.size() < static_cast<std::size_t>(size)) {
         std::cerr << "WARNING - File too small for the chosen FFT window";
         exit(EXIT_FAILURE);
     }
@@ -47,7 +52,7 @@ std::vector<fftw_complex> forward_fft(const std::vector<double> &input, int size
 
 /* Performs backward FFT on a signal */
 std::vector<double> backwards_fft(const std::vector<fftw_complex> &input, int size = FFT_RES) {
-    if (input.size() < (size_t)size) {
+    if (input.size() < static_cast<std::size_t>(size)) {
         std::cerr << "WARNING - File too small for the chosen FFT window";
         exit(EXIT_FAILURE);
     }
@@ -68,8 +73,7 @@ void apply_hamming(InputIt first, InputIt last) {
     auto size = std::distance(first, last);
     auto static bl = [size]() {
         std::vector<double> values(size);
-        int v = 0;
-        std::generate(values.begin(), values.end(), [size, v]() mutable {
+        std::generate(values.begin(), values.end(), [size, v = 0]() mutable {
             double res = 25.0 / 46 - (21.0 / 46) * cos(2 * M_PI * v / (size - 1));
             v++;
             return res;
@@ -95,12 +99,12 @@ int main(int argc, char *argv[]) {
     apply_hamming(input.samples[0].begin(), input.samples[0].begin() + FFT_RES);
     plot_signal(input.samples[0], FFT_RES, "Windowed input signal (padding hidden)");
 
-    /* Perform the transform on the selected window */
+    /* Perform the transform on the very first window */
     auto in_transformed = forward_fft(input.samples[0]);
     auto [freqs_n, amps_n] = logscale(in_transformed, input.getSampleRate());
     plot_fft(freqs_n.data(), amps_n.data(), amps_n.size(), "Spectrum of (windowed) input signal");
 
-    /* Zero out the 1kHz band and transform back */
+    /* Zero out the 1kHz band(s) and transform back */
     in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][0] = 0;
     in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][1] = 0;
     in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][0] = 0;
@@ -112,7 +116,7 @@ int main(int argc, char *argv[]) {
     in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 2][0] = 0;
     in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 2][1] = 0;
     auto [freqs, amps] = logscale(in_transformed, input.getSampleRate());
-    plot_fft(freqs_n.data(), amps.data(), amps.size(), "Spectrum of (windowed) input signal");
+    plot_fft(freqs.data(), amps.data(), amps.size(), "Spectrum of filtered signal");
 
     auto backagain = backwards_fft(in_transformed);
     plot_signal(backagain, FFT_RES, "Back again");

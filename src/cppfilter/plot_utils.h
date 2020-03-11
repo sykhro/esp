@@ -8,6 +8,7 @@
 #include <vector>
 #include <numeric>
 #include <memory>
+#include <string_view>
 
 extern "C" {
 #include "gnuplot_i.h"
@@ -28,15 +29,17 @@ std::shared_ptr<gnuplot_ctrl> init_plot_environment() {
     return gp;
 }
 
-void plot_fft(double *freqs, double *amps, int data, char* title = "FFT") {
+void plot_fft(double *freqs, double *amps, int data, std::string_view title = "FFT") {
     auto gp = g_plots.emplace_back(init_plot_environment()).get();
 
+    std::string range(std::string("set xrange [0:") + std::to_string(std::round(freqs[data - 1])) + std::string("]"));
+    gnuplot_cmd(gp, range.c_str());
     gnuplot_set_xlabel(gp, "Frequencies (Hz)");
-    gnuplot_set_ylabel(gp, "Magnitude (dB)");
-    gnuplot_plot_xy(gp, freqs, amps, data, title);
+    gnuplot_set_ylabel(gp, "Magnitude (dBFS)");
+    gnuplot_plot_xy(gp, freqs, amps, data, const_cast<char *>(title.cbegin()));
 }
 
-void plot_signal(std::vector<double> &samples, int num = FFT_RES, char* title = "FFT") {
+void plot_signal(std::vector<double> &samples, int num = FFT_RES, std::string_view title = "FFT") {
     auto gp = g_plots.emplace_back(init_plot_environment()).get();
 
     gnuplot_set_xlabel(gp, "Samples");
@@ -44,5 +47,5 @@ void plot_signal(std::vector<double> &samples, int num = FFT_RES, char* title = 
 
     std::vector<double> indexes(num);
     std::iota(indexes.begin(), indexes.end(), 0);
-    gnuplot_plot_xy(gp, indexes.data(), samples.data(), num, title);
+    gnuplot_plot_xy(gp, indexes.data(), samples.data(), num, const_cast<char *>(title.cbegin()));
 }
