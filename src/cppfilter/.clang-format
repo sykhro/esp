@@ -1,0 +1,21 @@
+﻿---
+BasedOnStyle: Chromium
+AlignTrailingComments: 'true'
+AlwaysBreakBeforeMultilineStrings: 'false'
+AlwaysBreakTemplateDeclarations: 'true'
+BinPackArguments: 'true'
+BinPackParameters: 'true'
+BreakConstructorInitializers: BeforeColon
+ColumnLimit: '100'
+CompactNamespaces: 'true'
+Cpp11BracedListStyle: 'true'
+FixNamespaceComments: 'true'
+IndentCaseLabels: 'true'
+IndentWidth: '4'
+Language: Cpp
+PointerAlignment: Right
+ReflowComments: 'true'
+SortIncludes: 'false'
+Standard: Cpp11
+
+...
