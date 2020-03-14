@@ -16,8 +16,8 @@ std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<f
                                                              uint32_t rate) {
 
     /* Generate x-axis */
-    auto size = input.size();
-    double resolution = rate / (size + .0);
+    auto size = input.size() - 1;
+    double resolution = rate / (2*(size - 1.0));
     std::vector<double> freqs(size);
     std::generate(freqs.begin(), freqs.end(),
                     [resolution, count = 0]() mutable { return count++ * resolution; });
@@ -25,7 +25,7 @@ std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<f
     /* Normalize and obtain log scale */
     std::vector<double> amps{};
     for (auto n : input) {
-        amps.push_back((std::pow(n[0], 2) + std::pow(n[1], 2))/size);
+        amps.push_back((std::pow(n[0], 2) + std::pow(n[1], 2))/(2*(size-1)));
     }
 
     auto max = *std::max_element(amps.begin(), amps.end());
@@ -86,34 +86,29 @@ void apply_hamming(InputIt first, InputIt last) {
                    std::multiplies<double>());
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <input_file>\n";
-        exit(EXIT_FAILURE);
-    }
-
-    AudioFile<double> input;
-    input.load(argv[1]);
-
-    auto& audiodata = input.samples[0];
-    plot_signal(audiodata, input.getNumSamplesPerChannel(), "Raw");
-
+void process_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
     std::vector<double> out(audiodata.size() + 2*FFT_RES, 0.0);
     for(std::size_t i = 0; i + FFT_RES/2 < audiodata.size(); i += FFT_RES/4) {
 
-        /* Pad data with zeroes */
+        /* Apply Hamming window to the audio data and pad it */
         std::vector<double> procdata(audiodata.begin() + i, audiodata.begin() + i + FFT_RES/2);
         apply_hamming(procdata.begin(), procdata.end());
         std::generate_n(std::back_inserter(procdata), FFT_RES/2, []() { return 0.0; });
 
-        /* Transform data and apply filter */
+        /* Transform and filter */
         auto in_transformed = forward_fft(procdata);
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][1] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][1] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][1] = 0;
+        auto [f, a] = logscale(in_transformed, sample_rate);
+        plot_fft(f.data(), a.data(), f.size(), "Unfiltered");
+
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate)][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate)][1] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) - 1][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) - 1][1] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) + 1][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) + 1][1] = 0;
+
+        auto [f2, a2] = logscale(in_transformed, sample_rate);
+        plot_fft(f2.data(), a2.data(), f2.size(), "Filtered");
 
         /* Revert to signal and overlap-add */
         auto backagain = backwards_fft(in_transformed);
@@ -127,10 +122,23 @@ int main(int argc, char *argv[]) {
     std::transform(out.begin(), out.end(), out.begin(),
                    [max](double d) { return d / max; });
 
-    plot_signal(out, input.getNumSamplesPerChannel(), "Filtered");
-
     /* Overwrite audio buffer and save cleaned signal */
-    std::copy(out.begin(), out.begin() + input.getNumSamplesPerChannel(), input.samples[0].begin());
+    std::copy(out.begin(), out.begin() + audiodata.size(), audiodata.begin());
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <input_file>\n";
+        exit(EXIT_FAILURE);
+    }
+
+    AudioFile<double> input;
+    input.load(argv[1]);
+
+    for(auto &channel : input.samples) {
+        process_channel(channel, input.getSampleRate());
+    }
+
     input.save("sigcleaned.wav");
 
     return 0;
