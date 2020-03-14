@@ -95,38 +95,36 @@ int main(int argc, char *argv[]) {
     AudioFile<double> input;
     input.load(argv[1]);
 
-    /* Apply window function and padding */
-    apply_hamming(input.samples[0].begin(), input.samples[0].begin() + FFT_RES);
-    plot_signal(input.samples[0], FFT_RES, "Windowed input signal (padding hidden)");
+    auto& audiodata = input.samples[0];
+    plot_signal(audiodata, input.getNumSamplesPerChannel(), "Raw");
 
-    /* Perform the transform on the very first window */
-    auto in_transformed = forward_fft(input.samples[0]);
-    auto [freqs_n, amps_n] = logscale(in_transformed, input.getSampleRate());
-    plot_fft(freqs_n.data(), amps_n.data(), amps_n.size(), "Spectrum of (windowed) input signal");
+    std::vector<double> out(audiodata.size() + 2*FFT_RES, 0.0);
+    for(std::size_t i = 0; i + FFT_RES/2 < audiodata.size(); i += FFT_RES/2) {
 
-    /* Zero out the 1kHz band(s) and transform back */
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][0] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][1] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][0] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][1] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][0] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][1] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 2][0] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 2][1] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 2][0] = 0;
-    in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 2][1] = 0;
-    auto [freqs, amps] = logscale(in_transformed, input.getSampleRate());
-    plot_fft(freqs.data(), amps.data(), amps.size(), "Spectrum of filtered signal");
+        /* Pad data with zeroes */
+        std::vector<double> procdata(audiodata.begin() + i, audiodata.begin() + i + FFT_RES/2);
+        //apply_hamming(procdata.begin(), procdata.end());
+        std::generate_n(std::back_inserter(procdata), FFT_RES/2, []() { return 0.0; });
 
-    auto backagain = backwards_fft(in_transformed);
-    plot_signal(backagain, FFT_RES, "Back again");
-    auto max = *std::max_element(backagain.begin(), backagain.end(),
-                                 [](double a, double b) { return (std::abs(a) < std::abs(b)); });
-    std::transform(backagain.begin(), backagain.end(), backagain.begin(),
+        /* Transform data and apply filter */
+        auto in_transformed = forward_fft(procdata);
+
+        /* Revert to signal and overlap-add */
+        auto backagain = backwards_fft(in_transformed);
+        std::transform(backagain.begin(), backagain.end(), out.begin() + i, out.begin() + i,
+                       std::plus<double>());
+    }
+
+    /* Normalize signal */
+    auto max = std::abs(*std::max_element(out.begin(), out.end(),
+                                 [](double a, double b) { return (std::abs(a) < std::abs(b)); }));
+    std::transform(out.begin(), out.end(), out.begin(),
                    [max](double d) { return d / max; });
 
-    /* Attach audio buffer and save cleaned signal */
-    std::copy(backagain.begin(), backagain.begin() + FFT_RES, input.samples[0].begin());
+    plot_signal(out, input.getNumSamplesPerChannel(), "Filtered");
+
+    /* Overwrite audio buffer and save cleaned signal */
+    std::copy(out.begin(), out.begin() + input.getNumSamplesPerChannel(), input.samples[0].begin());
     input.save("sigcleaned.wav");
 
     return 0;
