@@ -14,7 +14,7 @@ extern "C" {
 #include "gnuplot_i.h"
 }
 
-constexpr int FFT_RES = 8192;
+constexpr int FFT_RES = 8192 * 4;
 std::vector<std::shared_ptr<gnuplot_ctrl>> g_plots;
 
 std::shared_ptr<gnuplot_ctrl> init_plot_environment() {

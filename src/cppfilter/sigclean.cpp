@@ -99,15 +99,21 @@ int main(int argc, char *argv[]) {
     plot_signal(audiodata, input.getNumSamplesPerChannel(), "Raw");
 
     std::vector<double> out(audiodata.size() + 2*FFT_RES, 0.0);
-    for(std::size_t i = 0; i + FFT_RES/2 < audiodata.size(); i += FFT_RES/2) {
+    for(std::size_t i = 0; i + FFT_RES/2 < audiodata.size(); i += FFT_RES/4) {
 
         /* Pad data with zeroes */
         std::vector<double> procdata(audiodata.begin() + i, audiodata.begin() + i + FFT_RES/2);
-        //apply_hamming(procdata.begin(), procdata.end());
+        apply_hamming(procdata.begin(), procdata.end());
         std::generate_n(std::back_inserter(procdata), FFT_RES/2, []() { return 0.0; });
 
         /* Transform data and apply filter */
         auto in_transformed = forward_fft(procdata);
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate())][1] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) - 1][1] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][0] = 0;
+        in_transformed[(int)(1000 * (FFT_RES + .0) / input.getSampleRate()) + 1][1] = 0;
 
         /* Revert to signal and overlap-add */
         auto backagain = backwards_fft(in_transformed);
