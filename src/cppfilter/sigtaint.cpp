@@ -18,8 +18,8 @@ AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, f
        double sample = sinf(2. * M_PI * (i / sample_rate) * frequency);
 
        for(int channel = 0; channel < channels; channel++) {
-           /* ~-6db */
-           out[channel][i] = sample * 0.5;
+           /* ~-10db */
+           out[channel][i] = sample * 0.316;
        }
     }
 
@@ -28,8 +28,8 @@ AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, f
 
 /* Normalize a buffer of audio data */
 void normalize(AudioFile<double>::AudioBuffer &data, float norm) {
-    for(size_t channel = 0; channel < data.size(); channel++) {
-        for(size_t i = 0; i < data[channel].size(); i++) {
+    for(std::size_t channel = 0; channel < data.size(); channel++) {
+        for(std::size_t i = 0; i < data[channel].size(); i++) {
             data[channel][i] /= norm;
         }
     }
@@ -55,8 +55,8 @@ int main(int argc, char *argv[])
             input.samples[channel][i] += tone[channel][i];
 
             /* Keep track of highest peak for normalization */
-            if(std::fabs(input.samples[channel][i]) > norm) {
-                norm = input.samples[channel][i];
+            if(auto newnorm = std::abs(input.samples[channel][i]); newnorm > norm) {
+                norm = newnorm;
             }
         }
     }
