@@ -13,18 +13,19 @@
 
 /* Converts FFT output to log-scaled power values */
 std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<fftw_complex> &input,
-                                                             uint32_t rate, int size = FFT_RES) {
+                                                             uint32_t rate) {
 
     /* Generate x-axis */
+    auto size = input.size();
     double resolution = rate / (size + .0);
-    std::vector<double> freqs(size/2);
+    std::vector<double> freqs(size);
     std::generate(freqs.begin(), freqs.end(),
                     [resolution, count = 0]() mutable { return count++ * resolution; });
 
     /* Normalize and obtain log scale */
     std::vector<double> amps{};
-    for (int i = 0; i < size / 2; i++) {
-        amps.push_back((std::pow(input[i][0], 2) + std::pow(input[i][1], 2))/size);
+    for (auto n : input) {
+        amps.push_back((std::pow(n[0], 2) + std::pow(n[1], 2))/size);
     }
 
     auto max = *std::max_element(amps.begin(), amps.end());
@@ -34,14 +35,14 @@ std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<f
 }
 
 /* Performs forward FFT on a signal */
-std::vector<fftw_complex> forward_fft(const std::vector<double> &input, int size = FFT_RES) {
+std::vector<fftw_complex> forward_fft(std::vector<double> &input, int size = FFT_RES) {
     if (input.size() < static_cast<std::size_t>(size)) {
-        std::cerr << "WARNING - File too small for the chosen FFT window";
+        std::cerr << "ERROR - Not enough samples!";
         exit(EXIT_FAILURE);
     }
 
-    std::vector<fftw_complex> fftout(size);
-    fftw_plan fwd_plan = fftw_plan_dft_r2c_1d(size, const_cast<double *>(input.data()), fftout.data(), FFTW_ESTIMATE);
+    std::vector<fftw_complex> fftout(size/2 + 1);
+    fftw_plan fwd_plan = fftw_plan_dft_r2c_1d(size, input.data(), fftout.data(), FFTW_ESTIMATE);
     fftw_execute(fwd_plan);
 
     fftw_destroy_plan(fwd_plan);
@@ -51,14 +52,13 @@ std::vector<fftw_complex> forward_fft(const std::vector<double> &input, int size
 }
 
 /* Performs backward FFT on a signal */
-std::vector<double> backwards_fft(const std::vector<fftw_complex> &input, int size = FFT_RES) {
-    if (input.size() < static_cast<std::size_t>(size)) {
-        std::cerr << "WARNING - File too small for the chosen FFT window";
-        exit(EXIT_FAILURE);
+std::vector<double> backwards_fft(std::vector<fftw_complex> &input, int size = FFT_RES) {
+    if (input.size() != std::size_t(size/2 + 1)) {
+        std::cerr << "WARNING - funny complex input size!";
     }
 
     std::vector<double> fftout(size);
-    fftw_plan fwd_plan = fftw_plan_dft_c2r_1d(size, const_cast<fftw_complex *>(input.data()), fftout.data(), FFTW_ESTIMATE);
+    fftw_plan fwd_plan = fftw_plan_dft_c2r_1d(size, input.data(), fftout.data(), FFTW_ESTIMATE);
     fftw_execute(fwd_plan);
 
     fftw_destroy_plan(fwd_plan);
