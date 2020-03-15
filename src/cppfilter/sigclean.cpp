@@ -8,9 +8,24 @@
 #include <cmath>
 #include <fftw3.h>
 #include <cstddef>
+#include <map>
 
 #include "AudioFile.h"
 #include "plot_utils.h"
+
+const std::map<uint32_t, std::array<double, 5>> z_filters{
+    {8000, std::array<double, 5>{1.000000000000000, -1.414213562370318, 0.999999999996073,
+                                 -1.386976835594689, 0.961481451595328}},
+    {22050, std::array<double, 5>{1.000000000000000, -1.919350454669626, 0.999999999998575,
+                                  -1.905773886590930, 0.985852955569397}},
+    {44100, std::array<double, 5>{1.000000000000000, -1.979734945559178, 0.999999999999288,
+                                  -1.972708333069861, 0.992901461374129}},
+    {48000, std::array<double, 5>{1.000000000000000, -1.982889722746972, 0.999999999999346,
+                                  -1.976421874200365, 0.993476340642592}},
+    {96000, std::array<double, 5>{1.000000000000000, -1.995717846476881, 0.999999999999673,
+                                  -1.992457692292373, 0.996732850597504}},
+    {192000, std::array<double, 5>{1.000000000000000, -1.998929174952568, 0.999999999999836,
+                                   -1.997295141321751, 0.998365091018276}}};
 
 /* Converts FFT output to log-scaled power values */
 std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<fftw_complex> &input,
@@ -86,7 +101,7 @@ void apply_hamming(InputIt first, InputIt last) {
     std::transform(first, last, bl.begin(), first, std::multiplies<double>());
 }
 
-void process_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
+void fft_filter_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
     std::vector<double> out(audiodata.size() + 2 * FFT_RES, 0.0);
     for (std::size_t i = 0; i + FFT_RES / 4 < audiodata.size(); i += FFT_RES / 4) {
         /* Apply Hamming window to the audio data and pad it */
@@ -96,20 +111,22 @@ void process_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
 
         /* Transform and filter */
         auto in_transformed = forward_fft(procdata);
+
         /*
-                auto [f, a] = logscale(in_transformed, sample_rate);
-                plot_fft(f.data(), a.data(), f.size(), "Unfiltered");
+        auto [f, a] = logscale(in_transformed, sample_rate);
+        plot_fft(f.data(), a.data(), f.size(), "Unfiltered");
         */
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate)][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate)][1] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) - 1][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) - 1][1] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) + 1][0] = 0;
-        in_transformed[(int)(1000 * (FFT_RES + .0) / sample_rate) + 1][1] = 0;
-/*
+
+        for (int j = -8; j < 8; j++) {
+            in_transformed[(int)(1000.0 * FFT_RES / sample_rate) + j][0] = 0;
+            in_transformed[(int)(1000.0 * FFT_RES / sample_rate) + j][1] = 0;
+        }
+
+        /*
         auto [f2, a2] = logscale(in_transformed, sample_rate);
         plot_fft(f2.data(), a2.data(), f2.size(), "Filtered");
-*/
+        */
+
         /* Revert to signal and overlap-add */
         auto backagain = backwards_fft(in_transformed);
         std::transform(backagain.begin(), backagain.end(), out.begin() + i, out.begin() + i,
@@ -132,18 +149,53 @@ int main(int argc, char *argv[]) {
     }
 
     AudioFile<double> input;
-    if(!input.load(argv[1])) {
+    if (!input.load(argv[1])) {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Processing " << input.getNumSamplesPerChannel() << " samples on "
+    std::cout << "[FFT] Processing " << input.getNumSamplesPerChannel() << " samples on "
               << input.getNumChannels() << " channels...\n";
 
     for (auto &channel : input.samples) {
-        process_channel(channel, input.getSampleRate());
+        fft_filter_channel(channel, input.getSampleRate());
     }
 
-    input.save("sigcleaned.wav");
+    input.save("sigcleaned-fft.wav");
+
+    if (!input.load(argv[1])) {
+        exit(EXIT_FAILURE);
+    }
+
+    auto z_coeffs = z_filters.find(input.getSampleRate());
+    if (z_coeffs == z_filters.end()) {
+        std::cout << "Z filter unavailable for the requested sample rate\n";
+        exit(EXIT_SUCCESS);
+    }
+
+    std::cout << "[Z] Processing " << input.getNumSamplesPerChannel() << " samples on "
+              << input.getNumChannels() << " channels...\n";
+
+    auto &p = z_coeffs->second;
+    for (auto &channel : input.samples) {
+        std::vector<double> filtered(channel.size());
+
+        for (int n = 2; n < channel.size(); n++) {
+            /* Omitting p[0] since it's always 1 */
+            filtered[n] = channel[n] + p[1] * channel[n - 1] + p[2] * channel[n - 2] -
+                          p[3] * filtered[n - 1] - p[4] * filtered[n - 2];
+        }
+
+        auto max =
+            std::abs(*std::max_element(filtered.begin(), filtered.end(), [](double a, double b) {
+                return (std::abs(a) < std::abs(b));
+            }));
+        std::transform(filtered.begin(), filtered.end(), filtered.begin(),
+                       [max](double d) { return d / max; });
+
+        channel = filtered;
+    }
+
+    input.save("sigcleaned-z.wav");
 
     return 0;
 }
