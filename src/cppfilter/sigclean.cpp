@@ -13,19 +13,19 @@
 #include "AudioFile.h"
 #include "plot_utils.h"
 
-const std::map<uint32_t, std::array<double, 5>> z_filters{
-    {8000, std::array<double, 5>{1.000000000000000, -1.414213562370318, 0.999999999996073,
-                                 -1.386976835594689, 0.961481451595328}},
-    {22050, std::array<double, 5>{1.000000000000000, -1.919350454669626, 0.999999999998575,
-                                  -1.905773886590930, 0.985852955569397}},
-    {44100, std::array<double, 5>{1.000000000000000, -1.979734945559178, 0.999999999999288,
-                                  -1.972708333069861, 0.992901461374129}},
-    {48000, std::array<double, 5>{1.000000000000000, -1.982889722746972, 0.999999999999346,
-                                  -1.976421874200365, 0.993476340642592}},
-    {96000, std::array<double, 5>{1.000000000000000, -1.995717846476881, 0.999999999999673,
-                                  -1.992457692292373, 0.996732850597504}},
-    {192000, std::array<double, 5>{1.000000000000000, -1.998929174952568, 0.999999999999836,
-                                   -1.997295141321751, 0.998365091018276}}};
+const std::map<uint32_t, std::array<double, 4>> z_filters{
+    {8000, std::array<double, 4>{-1.414213562370318, 0.999999999996073, -1.386976835594689,
+                                 0.961481451595328}},
+    {22050, std::array<double, 4>{-1.919350454669626, 0.999999999998575, -1.905773886590930,
+                                  0.985852955569397}},
+    {44100, std::array<double, 4>{-1.979734945559178, 0.999999999999288, -1.972708333069861,
+                                  0.992901461374129}},
+    {48000, std::array<double, 4>{-1.982889722746972, 0.999999999999346, -1.976421874200365,
+                                  0.993476340642592}},
+    {96000, std::array<double, 4>{-1.995717846476881, 0.999999999999673, -1.992457692292373,
+                                  0.996732850597504}},
+    {192000, std::array<double, 4>{-1.998929174952568, 0.999999999999836, -1.997295141321751,
+                                   0.998365091018276}}};
 
 /* Converts FFT output to log-scaled power values */
 std::pair<std::vector<double>, std::vector<double>> logscale(const std::vector<fftw_complex> &input,
@@ -112,20 +112,10 @@ void fft_filter_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
         /* Transform and filter */
         auto in_transformed = forward_fft(procdata);
 
-        /*
-        auto [f, a] = logscale(in_transformed, sample_rate);
-        plot_fft(f.data(), a.data(), f.size(), "Unfiltered");
-        */
-
         for (int j = -8; j < 8; j++) {
             in_transformed[(int)(1000.0 * FFT_RES / sample_rate) + j][0] = 0;
             in_transformed[(int)(1000.0 * FFT_RES / sample_rate) + j][1] = 0;
         }
-
-        /*
-        auto [f2, a2] = logscale(in_transformed, sample_rate);
-        plot_fft(f2.data(), a2.data(), f2.size(), "Filtered");
-        */
 
         /* Revert to signal and overlap-add */
         auto backagain = backwards_fft(in_transformed);
@@ -140,6 +130,23 @@ void fft_filter_channel(std::vector<double> &audiodata, uint32_t sample_rate) {
 
     /* Overwrite audio buffer and save cleaned signal */
     std::copy(out.begin(), out.begin() + audiodata.size(), audiodata.begin());
+}
+
+void z_filter_channel(std::vector<double> &audiodata, const std::array<double, 4> &p) {
+    std::vector<double> filtered(audiodata.size());
+
+    for (int n = 2; n < audiodata.size(); n++) {
+        filtered[n] = audiodata[n] + p[0] * audiodata[n - 1] + p[1] * audiodata[n - 2] -
+                      p[2] * filtered[n - 1] - p[3] * filtered[n - 2];
+    }
+
+    auto max = std::abs(*std::max_element(filtered.begin(), filtered.end(), [](double a, double b) {
+        return (std::abs(a) < std::abs(b));
+    }));
+    std::transform(filtered.begin(), filtered.end(), filtered.begin(),
+                   [max](double d) { return d / max; });
+
+    audiodata = filtered;
 }
 
 int main(int argc, char *argv[]) {
@@ -175,24 +182,8 @@ int main(int argc, char *argv[]) {
     std::cout << "[Z] Processing " << input.getNumSamplesPerChannel() << " samples on "
               << input.getNumChannels() << " channels...\n";
 
-    auto &p = z_coeffs->second;
     for (auto &channel : input.samples) {
-        std::vector<double> filtered(channel.size());
-
-        for (int n = 2; n < channel.size(); n++) {
-            /* Omitting p[0] since it's always 1 */
-            filtered[n] = channel[n] + p[1] * channel[n - 1] + p[2] * channel[n - 2] -
-                          p[3] * filtered[n - 1] - p[4] * filtered[n - 2];
-        }
-
-        auto max =
-            std::abs(*std::max_element(filtered.begin(), filtered.end(), [](double a, double b) {
-                return (std::abs(a) < std::abs(b));
-            }));
-        std::transform(filtered.begin(), filtered.end(), filtered.begin(),
-                       [max](double d) { return d / max; });
-
-        channel = filtered;
+        z_filter_channel(channel, z_coeffs->second);
     }
 
     input.save("sigcleaned-z.wav");
