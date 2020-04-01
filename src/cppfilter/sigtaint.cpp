@@ -8,8 +8,7 @@
 #include "AudioFile.h"
 
 /* Generates a pure sine wave at -6dB */
-AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, float sample_rate,
-                                              float frequency = 1000.0) {
+AudioFile<double>::AudioBuffer make_test_tone(int channels, int total_samples, float sample_rate, float frequency = 1000.0) {
     AudioFile<double>::AudioBuffer out;
     out.resize(channels);
     for (int i = 0; i < channels; i++) {
@@ -54,10 +53,8 @@ int main(int argc, char *argv[]) {
     for (int channel = 0; channel < chans; channel++) {
         /* Normalize signal */
         auto max = std::abs(
-            *std::max_element(input.samples[channel].begin(), input.samples[channel].end(),
-                              [](double a, double b) { return (std::abs(a) < std::abs(b)); }));
-        std::transform(input.samples[channel].begin(), input.samples[channel].end(),
-                       input.samples[channel].begin(), [max](double d) { return d / max; });
+            *std::max_element(input.samples[channel].begin(), input.samples[channel].end(), [](double a, double b) { return (std::abs(a) < std::abs(b)); }));
+        std::transform(input.samples[channel].begin(), input.samples[channel].end(), input.samples[channel].begin(), [max](double d) { return d / max; });
 
         for (int i = 0; i < samps; i++) {
             input.samples[channel][i] += tone[channel][i];
