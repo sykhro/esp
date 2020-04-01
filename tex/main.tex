@@ -1,0 +1,61 @@
+\documentclass[11pt]{article}
+\usepackage[italian]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{import}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{gnuplottex}
+\usepackage{minted}
+
+\newcommand{\addsrcfile}[1]{
+    \filename{#1}
+    \inputminted [
+        linenos=true,
+        numberblanklines=true,
+        showspaces=false,
+        breaklines=true,
+        fontsize=\footnotesize
+    ]{cpp}
+    {#1}
+%    \bigskip \bigskip
+}
+
+\makeatletter
+\DeclareRobustCommand{\filename}[1]{
+    \begingroup
+           \def\textendash{-}
+           \filename@parse{#1}
+           \edef\filename@base{\detokenize\expandafter{\filename@base}}
+            \subsection{\filename@base.\filename@ext}
+    \endgroup
+}
+\makeatother
+
+\title{Sull'utilizzo di FFT per l'implementazione di un filtro a spillo\\
+\large Esperienze di Programmazione
+}
+\author{Elia Melucci}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\import{./src/}{01-introduzione.tex}
+\import{./src/}{02-tecniche.tex}
+\import{./src/}{03-implementazione.tex}
+\import{./src/}{04-analisi.tex}
+
+\bibliographystyle{unsrt}
+\bibliography{refs}
+
+\pagebreak
+\appendix
+\section{Codice sorgente}
+
+\addsrcfile{../src/cppfilter/sigtaint.cpp}
+\addsrcfile{../src/cppfilter/sigclean.cpp}
+
+\end{document}

@@ -1,0 +1,32 @@
+\section{Analisi dei risultati}
+Per analizzare l'efficacia del filtro è stato implementato un tool denominato \textbf{sigtaint}.
+Dato un file .WAV in ingresso, questo tool produce una copia contenente un disturbo sinusoidale a 1 kHz attenuato a -10 dB.\\
+I filtri, che tentano di eliminare il disturbo introdotto, sono implementati separatamente nel tool \textbf{sigclean}:
+nella versione FFT è stata utilizzata la libreria FFTW3\cite{fftw} per trasformate efficienti;
+la versione in trasformata zeta utilizza coefficienti precalcolati in MATLAB\cite{matfil}, al second'ordine con fattore di qualità $Q = 20$.
+
+Confrontiamo ora l'output di sigclean, applicato a un segnale ``sporcato'' da sigtaint,
+con quello di un filtro a spillo in ReaFIR\cite{cockos}, un equalizzatore audio professionale basato su FFT.
+
+\begin{gnuplot}[terminal=epslatex, terminaloptions={color font ", 12"}]
+	set style line 11 lc rgb '#808080' lt 1
+	set border 3 back ls 11
+	set tics nomirror
+					
+	set style line 12 lc rgb '#808080' lt 0 lw 1
+	set grid back ls 12
+							
+	set style line 1 lc rgb '#8b1a0e' pt 1 ps 1 lt 1 lw 2
+	set style line 2 lc rgb '#5e9c36' pt 6 ps 1 lt 1 lw 2
+	set style line 3 lc rgb '#1010ee' pt 6 ps 1 lt 1 lw 1
+	set style line 4 lc rgb '#10eeee' pt 6 ps 1 lt 1 lw 1
+
+	set xrange [800:1200]
+	set yrange [-170:0]
+	set title "Dettaglio 1kHz, sinusoide 440 Hz, campionata a 44.1 kHz"
+	plot "fft-nothing.csv" w l ls 1 t 'Segnale originale', \
+		"fft-z.csv" w l ls 2 t 'Segnale filtrato (Butterworth)', \
+		"fft-fil1.csv" w l ls 3 t 'Segnale filtrato (FFT)', \
+		"fft-rea.csv" w l ls 4 t 'Segnale filtrato (ReaFIR)'
+	
+\end{gnuplot}

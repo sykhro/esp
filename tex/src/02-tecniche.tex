@@ -1,0 +1,72 @@
+\section{Tecniche}
+\subsection{Progettazione del filtro FFT}
+Come accennato in precedenza, la trasformata di Fourier permette di rappresentare un segnale a partire dal dominio del tempo in dominio della frequenza (e viceversa).
+Questo è possibile poiché, poste le giuste condizioni, ogni segnale è esprimibile come somma di sinusoidi di diversa frequenza e intensità, che prendono il nome di ``funzioni di base''.
+Utilizzando una trasformata di Fourier discreta, un segnale da $N$ campioni viene convertito a $\frac{N}{2}+1$ valori complessi denominati ``bin'', intervalli di frequenze di ampiezza $\Delta f$, data dalla relazione
+$$
+\Delta f = \dfrac{f_s}{N}
+$$
+dove $f_s$ rappresenta la frequenza di campionamento.
+
+Il filtro è progettato semplicemente: una volta identificato il bin della frequenza desiderata è sufficiente impostarne il valore a zero.
+Ricordando che i bin hanno ampiezza uniforme, è possibile selezionare il bin corrispondente a una frequenza arbitraria $f$ tramite la relazione
+$$
+k = f \cdot \Delta f
+$$
+e quindi sviluppare un filtro in dominio frequenza con questa funzione di trasferimento
+$$
+H(n)_k =
+\begin{cases}
+    0 & \text{se }n = k\\
+    1 & \text{altrimenti}
+\end{cases}.
+$$
+
+Applicando la trasformata inversa allo spettro modificato si ottiene un segnale con attenuazione infinita rispetto alla frequenza scelta.
+
+\subsection{Design del filtro con trasformata zeta}
+È noto che la risposta in frequenza $H(\omega)$ di un filtro digitale è la funzione di trasferimento $H(z)$ valutata lungo il cerchio unitario $z = e^{i\omega}$.
+Data la frequenza di campionamento $f_s$ e la frequenza da filtrare $f_q$, esprimiamo la frequenza angolare normalizzata
+$$\omega_c = \frac{2 \pi f_q}{f_s}.$$
+Per ottenere le caratteristiche di un filtro a spillo, occorre una funzione di trasferimento che sia nulla quando $z = e^{i\omega_c}$;
+dato che i coefficienti della funzione sono valori reali ne consegue che deve essere zero anche quando $z = e^{-i\omega_c}$.
+Potremmo quindi scrivere
+$$
+H(z) = (z - e^{i\omega_c})(z - e^{-i\omega_c})
+$$
+ma tutte le funzioni di trasferimento di processi fisici sono proprie, ossia il numeratore ha grado non superiore a quello del denominatore.
+Per risolvere questo problema è sufficiente aggiungere due poli in $z = 0$:
+$$
+H(z) = \dfrac{(z - e^{i\omega_c})(z - e^{-i\omega_c})}{z^2}.
+$$
+Semplificando e utilizzando l'identità trigonometrica $\cos(\theta) = \frac{e^{i\theta} + e^{-i\theta}}{2}$ si ottiene
+\begin{align*}
+H(z) &= \dfrac{z^2 - z(e^{i\omega_c}+e^{-i\omega_c}) + e^{i\omega_c}e^{-i\omega_c}}{z^2}\\
+&= \dfrac{z^2 - 2\cos(\omega_c)+1}{z^2}\\
+&= 1 - 2\cos(\omega_c)z^{-1} + z^{-2}
+\end{align*}
+un filtro FIR, dunque sempre stabile e con fase lineare.
+
+\begin{gnuplot}[terminal=epslatex, terminaloptions=color]
+        set lmargin at screen 0.1
+	set rmargin at screen 0.9
+	set style line 11 lc rgb '#808080' lt 1
+        set border 3 back ls 11
+        set tics nomirror
+	set xtics 
+
+        set style line 12 lc rgb '#808080' lt 0 lw 1
+        set grid back ls 12
+
+        set style line 1 lc rgb '#8b1a0e' pt 1 ps 1 lt 1 lw 2
+#	set logscale x 10
+	set xrange [100:1600]
+	set xtics
+	set xlabel "Frequenze (Hz)"
+	set ylabel "Intensità (dB)" offset -2
+	plot "freqs.csv" using 1:2 with lines notitle ls 1
+\end{gnuplot}
+
+Come si evince dal diagramma di Bode questo design primitivo presenta una banda a -3 dB eccessivamente larga, rendendolo pertanto inadatto ad alcune applicazioni.
+Questo difetto può essere corretto utilizzando un filtro di ordine superiore.
+

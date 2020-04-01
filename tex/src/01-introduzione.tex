@@ -1,0 +1,23 @@
+\section{Introduzione}
+Un filtro elimina-banda è un dispositivo in grado di attenuare frequenze in un dato intervallo.
+In questo articolo viene proposta un'implementazione per un filtro elimina-banda con fattore di qualità molto alto,
+valutandone efficacia e efficienza considerando due design basati rispettivamente su FFT e trasformata zeta.
+
+\subsection{Fast Fourier Transform}
+La trasformata di Fourier discreta (DFT) trasforma una sequenza di valori (solitamente in dominio temporale) in componenti di diverse frequenze ed è definita come
+$$
+X_k = \sum_{n = 0}^{N - 1}x_n e^{\frac{-2\pi}{N}kn} \ \ k = 0, \dots, N-1
+$$
+
+Valutare questa definizione richiede $O(N^2)$ operazioni, dato che per ogni $X_k$ in uscita è richiesta una somma da $N$ termini.
+FFT è un algoritmo basato su divide-and-conquer che permette di calcolare DFT (sia diretta che inversa) di $N$ termini in $O(N \log N)$.
+Tutti gli algoritmi FFT conosciuti permettono di svolgere questa computazione in $\Theta(N \log N)$ operazioni; questo limite inferiore è un problema aperto\cite{fftlimits}.
+
+\subsection{Trasformata zeta}
+La trasformata zeta converte un segnale discreto, composto da una sequenza di numeri reali o complessi, in una rappresentazione complessa in dominio frequenza.\\
+Dato $n$ intero, $z \in \mathbb{C}$, la trasformata zeta di un segnale a tempo discreto $x_n$ è la serie formale di potenze $X_z$ definita come
+$$
+X_z = \sum_{n = -\infty}^{\infty}x_nz^{-n}
+$$
+e può essere usata per calcolare la risposta di un sistema causale discreto.
+

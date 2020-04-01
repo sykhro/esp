@@ -1,0 +1,82 @@
+\section{Implementazione}
+\subsection{Filtro FFT}
+Nella pratica, il design presentato nella sezione precedente si rivela problematico.
+Osserviamo lo spettrogramma di due segnali a 440 Hz con lo stesso contenuto in frequenza ma dove il secondo segnale presenta un numero di periodi non intero.
+
+\begin{gnuplot}[terminal=epslatex, terminaloptions={color size 12cm,14cm}]
+	set lmargin at screen 0.1
+	set multiplot layout 2, 1
+	
+	set style line 11 lc rgb '#808080' lt 1
+	set border 3 back ls 11
+	set tics nomirror
+	
+	set style line 12 lc rgb '#808080' lt 0 lw 1
+	set grid back ls 12
+	
+	set style line 1 lc rgb '#8b1a0e' pt 1 ps 1 lt 1 lw 2
+	set style line 2 lc rgb '#5e9c36' pt 6 ps 1 lt 1 lw 2
+
+	set title "Segnale d'esempio a 440 Hz; campionato a 44 kHz"
+	plot "cosine.csv" using 1:2 w l ls 1 notitle
+	set title "FFT"
+	set logscale x 10
+	set yrange [-200:0]
+	plot "fft-int.csv" u 1:2 t "Segnale periodico" w l ls 1, "fft-nint.csv" u 1:2 t "Segnale non periodico" w l ls 2
+
+#	set origin 0.15,0.05
+#	set size 0.6,0.3
+#	set xrange [330:660]
+#	unset xlabel
+#	unset ylabel
+#	unset label
+#	unset key
+#	unset title
+#	set xtics 110 offset 0,0.2
+#	set ytics 200 offset 0.2,0.2
+#	plot 'fft-int.csv' u 1:2 w lines ls 1, "fft-nint.csv" u 1:2 t "Segnale non periodico" w l ls 2
+
+	unset multiplot
+\end{gnuplot}
+
+Nonostante il segnale sia lo stesso, uno dei due grafici presenta picchi di larghezza maggiore rispetto all'altro;
+questo fenomeno, noto come ``spectral leakage'', produce informazioni imprecise riguardo il segnale analizzato, in particolare rispetto alle frequenze che si trovano ``in mezzo'' a due bin.
+Ne consegue che azzerare il valore di un bin non ha effetto soltanto sulla frequenza desiderata ma comporta distorsione, producendo come risultato un'onda simile a un battimento piuttosto che silenzio.
+
+Come soluzione è sufficiente applicare la FFT a un numero quanto più alto possibile di campioni.
+Dato che il filtro deve essere applicabile a segnali audio arbitrari,
+è stato scelto di aumentare il numero di campioni processando segmenti del file individualmente e aggiungere a questi un numero arbitrario di valori nulli.
+
+La FFT calcola i coefficienti per un segnale periodico ma i segnali di nostro interesse sono limitati e raramente periodici.
+Applicare semplicemente la FFT a un segmento di un segnale avvolge essenzialmente la fine del segmento all'inizio, generando una discontinuità di salto.
+Tali salti si traducono in artefatti indesiderabili: per ridurli è possibile azzerare il segnale a entrambe le estremità del segmento moltiplicandolo con una funzione finestra.
+Prima di appendere gli zeri viene quindi utilizzata la seguente funzione finestra
+$$
+w(n) = \frac{25}{46} - \frac{21}{46}\cos{\left( \dfrac{2\pi n}{N} \right)}, \ 0 \leq n \leq N
+$$
+nota come ``finestra di Hamming''\cite{Harris78onthe}.
+
+I segmenti devono essere riuniti dopo essere processati individualmente per poter formare un nuovo segnale.
+L'attenuazione agli estremi produce però un segnale con ampiezza non uniforme. Il problema viene risolto con overlay-add: si scelgono segmenti da $N$ campioni in modo che ogni segmento
+si sovrapponga con il successivo per $\frac{N}{2}$ campioni, effettuando FFT a incrementi di $\frac{N}{2}$.
+Le parti sovrapposte nel segnale in output vengono sommate e per simmetria della funzione finestra il segnale risultante avrà ampiezza uniforme.
+
+È stato scelto di azzerare, oltre al bin corrispondente alla frequenza desiderata, un piccolo numero di bin adiacenti scelto sulla base della frequenza di campionamento.
+La genericità del metodo lo rende appropriato per implementare filtri di diverso tipo in tempo reale.
+
+\subsection{Filtro con trasformata zeta}
+Per ottenere risultati migliori di quanto presentato nella sezione precedente si può far ricorso a un filtro Butterworth.
+La progettazione di tale filtro può essere velocizzata utlizzando generatori, che hanno come in input solamente caratteristiche generiche
+(ordine, frequenza di campionamento, tipo di filtro) e restituiscono i coefficienti del polinomio zeta.\\
+L'implementazione risulta molto più semplice. Ad esempio, nel caso di un filtro al second'ordine, sia $x$ il segnale in ingresso composto da $N$ campioni, $z$ il segnale in uscita, $a_i$ l'i-esimo coefficiente del filtro
+\begin{align*}
+z_0 &= x_0\\
+z_1 &= x_1\\
+z_{n \ \in \ \{2, \ \dots, \ N\}} &= a_0x_n + a_1x_{n-1} + a_2x_{n-2} - a_3z_{n-1} - a_4z_{n-2} 
+\end{align*}
+permette di filtrare il segnale in $\Theta(N)$. Inoltre, non si pone il problema dello spectral leakage e di conseguenza la necessità di applicare padding e funzioni finestra.
+D'altrocanto calcolare i coefficienti non è un'operazione computazionalmente leggera, inadatta per produrre filtri in tempo reale.
+A questo si aggiunge il problema della frequenza di campionamento: è un'informazione essenziale nella progettazione di questo tipo di filtro, ed è necessario che coincida con quella del segnale da filtrare.
+Si può risolvere il problema con un algoritmo di resampling, che interpola il segnale per far combaciare la frequenza di campionamento con quella del filtro, oppure precalcolando i coefficienti per le frequenze di campionamento più comuni.\\
+In questa implementazione è stato scelto il secondo metodo, per mantenere la complessità sopracitata. Si noti che, a costo di un'implementazione leggermente più complicata, è possibile svolgere l'intera operazione in $O(1)$ spazio.
+
